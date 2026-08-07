@@ -4,6 +4,8 @@ import com.mibejjh.ankipreview.data.model.Card
 import com.mibejjh.ankipreview.data.model.CardType
 import com.mibejjh.ankipreview.data.model.Deck
 import com.mibejjh.ankipreview.data.model.DeckPlan
+import com.mibejjh.ankipreview.data.model.NoteRow
+import com.mibejjh.ankipreview.data.model.NoteTable
 import com.mibejjh.ankipreview.data.model.TodayPlan
 import java.time.LocalDate
 
@@ -92,6 +94,42 @@ class FakeAnkiRepository : AnkiRepository {
 
     override suspend fun getCards(deckId: Long): List<Card> =
         cards.filter { it.deckId == deckId }
+
+    override suspend fun getNoteTables(deckIds: Set<Long>?): List<NoteTable> {
+        val selected = if (deckIds.isNullOrEmpty()) decks else decks.filter { it.id in deckIds }
+        return selected.mapNotNull { deck ->
+            val rows = noteRows[deck.id] ?: return@mapNotNull null
+            NoteTable(
+                deckId = deck.id,
+                deckName = deck.name,
+                fieldNames = FIELD_NAMES,
+                rows = rows,
+            )
+        }
+    }
+
+    private companion object {
+        val FIELD_NAMES = listOf("Word", "Meaning", "Example")
+
+        val noteRows: Map<Long, List<NoteRow>> = mapOf(
+            1001L to listOf(
+                NoteRow(101, listOf("abundant", "풍부한", "an abundant harvest")),
+                NoteRow(102, listOf("benevolent", "자애로운", "a benevolent ruler")),
+                NoteRow(103, listOf("candid", "솔직한", "a candid opinion")),
+                NoteRow(104, listOf("diligent", "부지런한", "a diligent student")),
+                NoteRow(105, listOf("eloquent", "유창한", "an eloquent speaker")),
+            ),
+            1002L to listOf(
+                NoteRow(201, listOf("meticulous", "꼼꼼한", "meticulous attention")),
+                NoteRow(202, listOf("nonchalant", "무심한", "a nonchalant shrug")),
+                NoteRow(203, listOf("obsolete", "쓸모없는", "obsolete technology")),
+            ),
+            1003L to listOf(
+                NoteRow(301, listOf("ambiguous", "모호한", "an ambiguous answer")),
+                NoteRow(302, listOf("coherent", "일관된", "a coherent argument")),
+            ),
+        )
+    }
 
     private fun card(
         id: Long,

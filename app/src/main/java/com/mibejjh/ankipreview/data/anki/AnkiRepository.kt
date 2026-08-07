@@ -2,6 +2,7 @@ package com.mibejjh.ankipreview.data.anki
 
 import com.mibejjh.ankipreview.data.model.Card
 import com.mibejjh.ankipreview.data.model.Deck
+import com.mibejjh.ankipreview.data.model.NoteTable
 import com.mibejjh.ankipreview.data.model.TodayPlan
 
 /**
@@ -27,4 +28,10 @@ interface AnkiRepository {
 
     /** 특정 덱의 모든 예정 카드를 반환한다 (델범위). */
     suspend fun getCards(deckId: Long): List<Card>
+
+    /**
+     * 선택된 덱의 노트를 테이블(탐색기) 형태로 반환한다.
+     * @param deckIds 특정 덱만 조회할 경우 덱 id 집합. null/빈 집합이면 전체 덱.
+     */
+    suspend fun getNoteTables(deckIds: Set<Long>? = null): List<NoteTable>
 }

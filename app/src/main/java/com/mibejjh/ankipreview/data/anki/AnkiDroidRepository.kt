@@ -7,6 +7,8 @@ import android.net.Uri
 import com.mibejjh.ankipreview.data.model.Card
 import com.mibejjh.ankipreview.data.model.CardType
 import com.mibejjh.ankipreview.data.model.Deck
+import com.mibejjh.ankipreview.data.model.NoteRow
+import com.mibejjh.ankipreview.data.model.NoteTable
 import com.mibejjh.ankipreview.data.model.TodayPlan
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,10 @@ class AnkiDroidRepository(
     override suspend fun getCards(deckId: Long): List<Card> = withContext(Dispatchers.IO) {
         val deckNames = queryDecks().associate { it.id to it.name }
         queryDueCards(deckNames).filter { it.deckId == deckId }
+    }
+
+    override suspend fun getNoteTables(deckIds: Set<Long>?): List<NoteTable> = withContext(Dispatchers.IO) {
+        buildNoteTables(deckIds)
     }
 
     // region decks
@@ -165,11 +171,102 @@ class AnkiDroidRepository(
 
     // endregion
 
+    // region note tables
+
+    private fun buildNoteTables(deckIds: Set<Long>?): List<NoteTable> {
+        val decks = queryDecks()
+        val selected = if (deckIds.isNullOrEmpty()) decks else decks.filter { it.id in deckIds }
+        val modelFieldNames = queryModelFieldNames()
+        return selected.mapNotNull { deck ->
+            val notes = queryNotesForDeck(deck.name)
+            if (notes.isEmpty()) return@mapNotNull null
+            val fieldNames = notes.firstNotNullOfOrNull { modelFieldNames[it.mid] }
+                ?: return@mapNotNull null
+            NoteTable(
+                deckId = deck.id,
+                deckName = deck.name,
+                fieldNames = fieldNames,
+                rows = notes.map { NoteRow(it.noteId, it.fieldValues) },
+            )
+        }
+    }
+
+    private data class NoteInfo(val noteId: Long, val mid: Long, val fieldValues: List<String>)
+
+    /** 덱 이름으로 노트를 검색한다 (Anki 검색 문법 `deck:"name"`). */
+    private fun queryNotesForDeck(deckName: String): List<NoteInfo> {
+        val search = "deck:\"$deckName\""
+        val result = mutableListOf<NoteInfo>()
+        contentResolver.query(NOTES_URI, NOTE_PROJECTION, search, null, null)?.use { c ->
+            val idCol = c.getColumnIndex(NOTE_ROW_ID)
+            val midCol = c.getColumnIndex(NOTE_MID)
+            val fldsCol = c.getColumnIndex(NOTE_FLDS)
+            while (c.moveToNext()) {
+                result += NoteInfo(
+                    noteId = c.getLong(idCol),
+                    mid = c.getLong(midCol),
+                    fieldValues = parseFlds(c.getString(fldsCol)),
+                )
+            }
+        }
+        return result
+    }
+
+    /** 모델(노트 타입) id → 필드명 목록. */
+    private fun queryModelFieldNames(): Map<Long, List<String>> {
+        val result = mutableMapOf<Long, List<String>>()
+        contentResolver.query(MODELS_URI, null, null, null, null)?.use { c ->
+            val idCol = c.getColumnIndex(MODEL_ID)
+            val fieldNamesCol = c.getColumnIndex(MODEL_FIELD_NAMES)
+            while (c.moveToNext()) {
+                result[c.getLong(idCol)] = parseFieldNames(c.getString(fieldNamesCol))
+            }
+        }
+        return result
+    }
+
+    /** 노트 `flds`(필드값)를 파싱하고 HTML 태그를 제거한다. AnkiDroid는 0x1F(unit separator)로 구분한다. */
+    private fun parseFlds(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        val trimmed = raw.trim()
+        val values = if (trimmed.startsWith("[")) {
+            try {
+                val arr = org.json.JSONArray(trimmed)
+                (0 until arr.length()).map { arr.optString(it) }
+            } catch (_: org.json.JSONException) {
+                emptyList()
+            }
+        } else {
+            trimmed.split("\u001F")
+        }
+        return values.map { stripHtml(it) }
+    }
+
+    /** 모델 `field_names`(필드명)를 파싱한다. AnkiDroid는 0x1F(unit separator)로 구분한다. */
+    private fun parseFieldNames(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        // JSON 배열 형태면 JSON 파싱, 아니면 0x1F 구분자로 분리
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("[")) {
+            return try {
+                val arr = org.json.JSONArray(trimmed)
+                (0 until arr.length()).map { arr.optString(it) }
+            } catch (_: org.json.JSONException) {
+                emptyList()
+            }
+        }
+        return trimmed.split("\u001F").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    // endregion
+
     private companion object {
         const val ANKIDROID_PACKAGE = "com.ichi2.anki"
         const val AUTHORITY = "com.ichi2.anki.flashcards"
         val CARDS_URI: Uri = Uri.parse("content://$AUTHORITY/cards")
         val DECK_URI: Uri = Uri.parse("content://$AUTHORITY/decks")
+        val NOTES_URI: Uri = Uri.parse("content://$AUTHORITY/notes")
+        val MODELS_URI: Uri = Uri.parse("content://$AUTHORITY/models")
 
         // Card columns
         const val CARD_ID = "_id"
@@ -194,6 +291,17 @@ class AnkiDroidRepository(
         const val DECK_COUNTS = "deck_count"
         const val OPTIONS = "options"
         const val DECK_DYN = "deck_dyn"
+
+        // Note columns
+        const val NOTE_ROW_ID = "_id"
+        const val NOTE_MID = "mid"
+        const val NOTE_FLDS = "flds"
+
+        // Model columns
+        const val MODEL_ID = "_id"
+        const val MODEL_FIELD_NAMES = "field_names"
+
+        val NOTE_PROJECTION: Array<String> = arrayOf(NOTE_ROW_ID, NOTE_MID, NOTE_FLDS)
 
         val CARD_PROJECTION: Array<String> = arrayOf(
             CARD_ID, NOTE_ID, CARD_ORD, CARD_NAME, DECK_ID,

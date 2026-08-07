@@ -15,25 +15,25 @@ object TodayPlanAssembler {
     /**
      * @param decksWithCounts 덱과 그 덱의 오늘 예정 수. counts는 스케줄러 산출값.
      * @param cardsByDeck     덱 id → 카드 목록 (신규/학습/복습 포함, 미정렬 허용)
-     * @param deckFilter      덱 이름 부분 일치 필터 (null/빈 값이면 전체)
+     * @param deckIds         선택된 덱 id 집합. null이면 전체, 빈 집합이면 빈 계획.
      */
     fun assemble(
         decksWithCounts: List<Pair<Deck, DeckCounts>>,
         cardsByDeck: Map<Long, List<Card>>,
-        deckFilter: String? = null,
+        deckIds: Set<Long>? = null,
         generatedAt: Long = System.currentTimeMillis(),
         dateKey: String = "",
     ): TodayPlan {
         val plans = decksWithCounts.mapNotNull { (deck, counts) ->
-            if (!matchesFilter(deck.name, deckFilter)) return@mapNotNull null
+            if (!matchesFilter(deck.id, deckIds)) return@mapNotNull null
             val selected = selectCards(deck, counts, cardsByDeck[deck.id].orEmpty())
             if (selected.isEmpty()) null else DeckPlan(deck, selected)
         }
         return TodayPlan(generatedAt = generatedAt, dateKey = dateKey, decks = plans)
     }
 
-    private fun matchesFilter(name: String, filter: String?): Boolean =
-        filter.isNullOrBlank() || name.contains(filter, ignoreCase = true)
+    private fun matchesFilter(deckId: Long, deckIds: Set<Long>?): Boolean =
+        deckIds == null || deckId in deckIds
 
     /**
      * 한 덱의 카드 목록에서 신규/학습/복습을 각각 오늘 예정 수만큼 잘라 합친다.

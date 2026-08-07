@@ -45,8 +45,8 @@ class AnkiDroidRepository(
         queryDecks()
     }
 
-    override suspend fun getTodayPlan(deckFilter: String?): TodayPlan = withContext(Dispatchers.IO) {
-        buildTodayPlan(deckFilter)
+    override suspend fun getTodayPlan(deckIds: Set<Long>?): TodayPlan = withContext(Dispatchers.IO) {
+        buildTodayPlan(deckIds)
     }
 
     override suspend fun getCards(deckId: Long): List<Card> = withContext(Dispatchers.IO) {
@@ -86,16 +86,15 @@ class AnkiDroidRepository(
 
     // region today plan
 
-    private fun buildTodayPlan(deckFilter: String?): TodayPlan {
+    private fun buildTodayPlan(deckIds: Set<Long>?): TodayPlan {
         val decks = queryDecks()
-        val activeDecks = decks.filterNot { it.isDynamic }
         val deckNames = decks.associate { it.id to it.name }
         val dueCards = queryDueCards(deckNames)
         val cardsByDeck = dueCards.groupBy { it.deckId }
         return TodayPlanAssembler.assemble(
-            decksWithCounts = activeDecks.map { it to DeckCounts(it.learnCount, it.reviewCount, it.newCount) },
+            decksWithCounts = decks.map { it to DeckCounts(it.learnCount, it.reviewCount, it.newCount) },
             cardsByDeck = cardsByDeck,
-            deckFilter = deckFilter,
+            deckIds = deckIds,
             generatedAt = System.currentTimeMillis(),
             dateKey = LocalDate.now().toString(),
         )

@@ -32,6 +32,17 @@ class FakeAnkiRepository : AnkiRepository {
             newPerDayLimit = 20,
             reviewPerDayLimit = 200,
         ),
+        // 맞춤학습(동적/filtered) 덱
+        Deck(
+            id = 1003,
+            name = "맞춤학습::오답집중",
+            newCount = 1,
+            learnCount = 1,
+            reviewCount = 3,
+            newPerDayLimit = 20,
+            reviewPerDayLimit = 200,
+            isDynamic = true,
+        ),
     )
 
     private val cards: List<Card> = buildList {
@@ -54,6 +65,12 @@ class FakeAnkiRepository : AnkiRepository {
         add(card(205, 1002, "영어::고급", "quintessential", "전형적인", CardType.REVIEW))
         add(card(206, 1002, "영어::고급", "resilient", "회복력 있는", CardType.REVIEW))
         add(card(207, 1002, "영어::고급", "subtle", "미묘한", CardType.REVIEW))
+        // 맞춤학습(동적) 덱
+        add(card(301, 1003, "맞춤학습::오답집중", "ambiguous", "모호한", CardType.NEW))
+        add(card(302, 1003, "맞춤학습::오답집중", "coherent", "일관된", CardType.LEARNING))
+        add(card(303, 1003, "맞춤학습::오답집중", "deteriorate", "악화되다", CardType.REVIEW))
+        add(card(304, 1003, "맞춤학습::오답집중", "elaborate", "정교한", CardType.REVIEW))
+        add(card(305, 1003, "맞춤학습::오답집중", "feasible", "실현 가능한", CardType.REVIEW))
     }
 
     override fun isAvailable(): Boolean = true
@@ -62,11 +79,11 @@ class FakeAnkiRepository : AnkiRepository {
 
     override suspend fun getDecks(): List<Deck> = decks
 
-    override suspend fun getTodayPlan(deckFilter: String?): TodayPlan {
+    override suspend fun getTodayPlan(deckIds: Set<Long>?): TodayPlan {
         val plan = TodayPlanAssembler.assemble(
             decksWithCounts = decks.map { it to DeckCounts(it.learnCount, it.reviewCount, it.newCount) },
             cardsByDeck = cards.groupBy { it.deckId },
-            deckFilter = deckFilter,
+            deckIds = deckIds,
             generatedAt = System.currentTimeMillis(),
             dateKey = LocalDate.now().toString(),
         )

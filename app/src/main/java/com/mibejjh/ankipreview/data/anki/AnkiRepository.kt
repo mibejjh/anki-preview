@@ -21,9 +21,9 @@ interface AnkiRepository {
 
     /**
      * 오늘 학습할 카드 계획을 반환한다.
-     * @param deckFilter 특정 덱만 조회할 경우 덱 이름(부분 일치) 또는 null(전체)
+     * @param deckIds 특정 덱만 조회할 경우 덱 id 집합. null이면 전체, 빈 집합이면 빈 계획.
      */
-    suspend fun getTodayPlan(deckFilter: String? = null): TodayPlan
+    suspend fun getTodayPlan(deckIds: Set<Long>? = null): TodayPlan
 
     /** 특정 덱의 모든 예정 카드를 반환한다 (델범위). */
     suspend fun getCards(deckId: Long): List<Card>

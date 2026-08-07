@@ -56,10 +56,15 @@ class TodayViewModel(
         }
     }
 
-    /** 오늘 카드 계획을 다시 불러온다. */
+    /** 오늘 카드 계획을 다시 불러온다. 덱 목록(칩 개수)도 함께 갱신한다. */
     fun load() {
         _uiState.value = TodayUiState.Loading
         viewModelScope.launch {
+            _allDecks.value = try {
+                if (repository.isAvailable()) repository.getDecks() else emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
             _uiState.value = try {
                 if (!repository.isAvailable()) {
                     TodayUiState.Error(

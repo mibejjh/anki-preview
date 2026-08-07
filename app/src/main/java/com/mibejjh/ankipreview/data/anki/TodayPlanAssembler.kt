@@ -33,7 +33,7 @@ object TodayPlanAssembler {
     }
 
     private fun matchesFilter(deckId: Long, deckIds: Set<Long>?): Boolean =
-        deckIds == null || deckId in deckIds
+        deckIds == null || deckIds.isEmpty() || deckId in deckIds
 
     /**
      * 한 덱의 카드 목록에서 신규/학습/복습을 각각 오늘 예정 수만큼 잘라 합친다.

@@ -302,29 +302,17 @@ private fun NoteTableSection(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
         ) {
-            // 헤더 행 (열 이름 + 가리기 아이콘)
-            Row {
-                visibleIndices.forEach { i ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        TableCell(
-                            text = table.fieldNames[i],
-                            isHeader = true,
-                            fontScale = fontScale,
-                            hidden = false,
-                        )
-                        IconButton(
-                            onClick = { onToggleColumnMask(i) },
-                            modifier = Modifier.size(24.dp),
-                        ) {
-                            Icon(
-                                if (i in maskedFields) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (i in maskedFields) "열 보이기" else "열 가리기",
-                                modifier = Modifier.size(14.dp),
-                                tint = if (i in maskedFields) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+            // 헤더 행 (열 이름이 가리기/보이기 토글) 
+            Row { 
+                visibleIndices.forEach { i -> 
+                    TableCell( 
+                        text = table.fieldNames[i], 
+                        isHeader = true, 
+                        fontScale = fontScale, 
+                        hidden = i in maskedFields, 
+                        onClick = { onToggleColumnMask(i) }, 
+                    ) 
+                } 
             }
             // 데이터 행
             table.rows.forEach { row ->
@@ -352,17 +340,26 @@ private fun NoteTableSection(
 }
 
 @Composable
-private fun TableCell(text: String, isHeader: Boolean, fontScale: Float, hidden: Boolean = false) {
+private fun TableCell(text: String, isHeader: Boolean, fontScale: Float, hidden: Boolean = false, onClick: (() -> Unit)? = null) {
     val bg = if (isHeader) {
-        MaterialTheme.colorScheme.surfaceVariant
+        if (hidden) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+        else MaterialTheme.colorScheme.surfaceVariant
     } else if (hidden) {
         MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
     } else {
         MaterialTheme.colorScheme.surface
     }
+    val contentColor = if (isHeader && hidden) {
+        MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+    } else if (hidden) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     Surface(
         color = bg,
-        modifier = Modifier.width(CELL_WIDTH),
+        modifier = Modifier.width(CELL_WIDTH)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
     ) {
         Text(
             text = text,
@@ -370,6 +367,7 @@ private fun TableCell(text: String, isHeader: Boolean, fontScale: Float, hidden:
                 MaterialTheme.typography.bodyMedium.copy(
                     fontSize = (14 * fontScale).sp,
                     fontWeight = FontWeight.Bold,
+                    color = if (hidden) contentColor else MaterialTheme.colorScheme.onSurface,
                 )
             } else {
                 MaterialTheme.typography.bodyMedium.copy(

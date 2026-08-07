@@ -1,5 +1,6 @@
 package com.mibejjh.ankipreview.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -68,6 +71,8 @@ fun TodayScreen(
     val allDecks by viewModel.allDecks.collectAsStateWithLifecycle()
     val selectedDeckIds by viewModel.selectedDeckIds.collectAsStateWithLifecycle()
     val hiddenFields by viewModel.hiddenFields.collectAsStateWithLifecycle()
+    val hideAnswers by viewModel.hideAnswers.collectAsStateWithLifecycle()
+    val revealedNoteIds by viewModel.revealedNoteIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Scaffold(
@@ -76,6 +81,12 @@ fun TodayScreen(
             TopAppBar(
                 title = { Text("오늘의 카드") },
                 actions = {
+                    IconButton(onClick = { viewModel.toggleHideAnswers() }) {
+                        Icon(
+                            if (hideAnswers) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (hideAnswers) "모두 보기" else "가리기",
+                        )
+                    }
                     IconButton(onClick = { viewModel.load() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                     }
@@ -115,6 +126,9 @@ fun TodayScreen(
                     hiddenFields = hiddenFields,
                     fontScale = fontScale,
                     onToggleField = viewModel::toggleField,
+                    hideAnswers = hideAnswers,
+                    revealedNoteIds = revealedNoteIds,
+                    onToggleRevealRow = viewModel::toggleRevealRow,
                     emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
                 )
             }
@@ -175,6 +189,9 @@ private fun TodayContent(
     hiddenFields: Map<Long, Set<Int>>,
     fontScale: Float,
     onToggleField: (Long, Int) -> Unit,
+    hideAnswers: Boolean,
+    revealedNoteIds: Set<Long>,
+    onToggleRevealRow: (Long) -> Unit,
     emptyMessage: String,
 ) {
     if (tables.isEmpty()) {
@@ -200,6 +217,9 @@ private fun TodayContent(
                     hiddenFields = hiddenFields[table.deckId] ?: emptySet(),
                     fontScale = fontScale,
                     onToggleField = { onToggleField(table.deckId, it) },
+                    hideAnswers = hideAnswers,
+                    revealedNoteIds = revealedNoteIds,
+                    onToggleRevealRow = onToggleRevealRow,
                 )
             }
         }
@@ -212,8 +232,12 @@ private fun NoteTableSection(
     hiddenFields: Set<Int>,
     fontScale: Float,
     onToggleField: (Int) -> Unit,
+    hideAnswers: Boolean,
+    revealedNoteIds: Set<Long>,
+    onToggleRevealRow: (Long) -> Unit,
 ) {
     val visibleIndices = table.fieldNames.indices.filter { it !in hiddenFields }
+    val firstVisibleIdx = visibleIndices.firstOrNull() ?: 0
     Column {
         Text(
             text = table.deckName,
@@ -259,16 +283,26 @@ private fun NoteTableSection(
                         text = table.fieldNames[i],
                         isHeader = true,
                         fontScale = fontScale,
+                        hidden = false,
                     )
                 }
             }
             table.rows.forEach { row ->
-                Row {
-                    visibleIndices.forEach { i ->
+                val isRowHidden = hideAnswers && row.noteId !in revealedNoteIds
+                Row(
+                    modifier = if (hideAnswers) {
+                        Modifier.clickable { onToggleRevealRow(row.noteId) }
+                    } else {
+                        Modifier
+                    },
+                ) {
+                    visibleIndices.forEachIndexed { colIdx, i ->
+                        val cellHidden = isRowHidden && i != firstVisibleIdx
                         TableCell(
-                            text = row.fieldValues.getOrElse(i) { "" },
+                            text = if (cellHidden) "?" else row.fieldValues.getOrElse(i) { "" },
                             isHeader = false,
                             fontScale = fontScale,
+                            hidden = cellHidden,
                         )
                     }
                 }
@@ -278,8 +312,14 @@ private fun NoteTableSection(
 }
 
 @Composable
-private fun TableCell(text: String, isHeader: Boolean, fontScale: Float) {
-    val bg = if (isHeader) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+private fun TableCell(text: String, isHeader: Boolean, fontScale: Float, hidden: Boolean = false) {
+    val bg = if (isHeader) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else if (hidden) {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
     Surface(
         color = bg,
         modifier = Modifier.width(CELL_WIDTH),
@@ -292,7 +332,10 @@ private fun TableCell(text: String, isHeader: Boolean, fontScale: Float) {
                     fontWeight = FontWeight.Bold,
                 )
             } else {
-                MaterialTheme.typography.bodyMedium.copy(fontSize = (14 * fontScale).sp)
+                MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = (14 * fontScale).sp,
+                    color = if (hidden) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
             },
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
         )

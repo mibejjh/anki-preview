@@ -79,7 +79,7 @@ class TodayPlanAssemblerTest {
     }
 
     @Test
-    fun `applies deckFilter by name substring ignorecase`() {
+    fun `filters decks by deckIds`() {
         val deckA = deck
         val deckB = deck.copy(id = 2, name = "스페인어::기초")
         val cardsForA = listOf(card(1, CardType.NEW), card(2, CardType.LEARNING), card(3, CardType.REVIEW))
@@ -89,10 +89,20 @@ class TodayPlanAssemblerTest {
                 deckB to DeckCounts(1, 1, 1),
             ),
             cardsByDeck = mapOf(1L to cardsForA, 2L to cardsForA),
-            deckFilter = "영어",
+            deckIds = setOf(1L),
         )
         assertEquals(1, plan.decks.size)
         assertEquals("영어::중급", plan.decks.first().deck.name)
+    }
+
+    @Test
+    fun `empty deckIds yields empty plan`() {
+        val plan = TodayPlanAssembler.assemble(
+            decksWithCounts = listOf(deck to DeckCounts(1, 1, 1)),
+            cardsByDeck = mapOf(1L to listOf(card(1, CardType.NEW))),
+            deckIds = emptySet(),
+        )
+        assertEquals(0, plan.decks.size)
     }
 
     @Test

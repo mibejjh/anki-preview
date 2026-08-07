@@ -175,16 +175,38 @@ class AnkiDroidRepository(
 
     private fun buildNoteTables(deckIds: Set<Long>?): List<NoteTable> {
         val decks = queryDecks()
+        if (deckIds != null && deckIds.isEmpty()) return emptyList()
         val selected = if (deckIds == null) decks else decks.filter { it.id in deckIds }
+        if (selected.isEmpty()) return emptyList()
+        val deckNames = decks.associate { it.id to it.name }
+        val dueCards = queryDueCards(deckNames)
+        // 서브덱(:: 계층) 카드를 선택된 상위 덱으로 귀속
+        val cardsBySelected = mutableMapOf<Long, MutableList<Card>>()
+        for (card in dueCards) {
+            val cardDeckName = deckNames[card.deckId] ?: continue
+            val owner = selected.firstOrNull { cardDeckName == it.name || cardDeckName.startsWith(it.name + "::") }
+            if (owner != null) cardsBySelected.getOrPut(owner.id) { mutableListOf() }.add(card)
+        }
+        val plan = TodayPlanAssembler.assemble(
+            decksWithCounts = selected.map { it to DeckCounts(it.learnCount, it.reviewCount, it.newCount) },
+            cardsByDeck = cardsBySelected,
+            deckIds = null,
+            generatedAt = System.currentTimeMillis(),
+            dateKey = LocalDate.now().toString(),
+        )
         val modelFieldNames = queryModelFieldNames()
-        return selected.mapNotNull { deck ->
-            val notes = queryNotesForDeck(deck.name)
+        val allNoteIds = plan.decks.flatMap { dp -> dp.cards.map { it.noteId } }.toSet()
+        val noteById = queryNotesByIds(allNoteIds).associateBy { it.noteId }
+        return plan.decks.mapNotNull { deckPlan ->
+            val notes = deckPlan.cards
+                .mapNotNull { noteById[it.noteId] }
+                .distinctBy { it.noteId }
             if (notes.isEmpty()) return@mapNotNull null
             val fieldNames = notes.firstNotNullOfOrNull { modelFieldNames[it.mid] }
                 ?: return@mapNotNull null
             NoteTable(
-                deckId = deck.id,
-                deckName = deck.name,
+                deckId = deckPlan.deck.id,
+                deckName = deckPlan.deck.name,
                 fieldNames = fieldNames,
                 rows = notes.map { NoteRow(it.noteId, it.fieldValues) },
             )
@@ -193,11 +215,12 @@ class AnkiDroidRepository(
 
     private data class NoteInfo(val noteId: Long, val mid: Long, val fieldValues: List<String>)
 
-    /** 덱 이름으로 노트를 검색한다 (Anki 검색 문법 `deck:"name"`). */
-    private fun queryNotesForDeck(deckName: String): List<NoteInfo> {
-        val search = "deck:\"$deckName\""
+    /** 노트 id 집합으로 노트를 조회한다 (notes_v2 직접 SQL). */
+    private fun queryNotesByIds(noteIds: Set<Long>): List<NoteInfo> {
+        if (noteIds.isEmpty()) return emptyList()
+        val selection = "$NOTE_ROW_ID IN (${noteIds.joinToString(",")})"
         val result = mutableListOf<NoteInfo>()
-        contentResolver.query(NOTES_URI, NOTE_PROJECTION, search, null, null)?.use { c ->
+        contentResolver.query(NOTES_URI_V2, NOTE_PROJECTION, selection, null, null)?.use { c ->
             val idCol = c.getColumnIndex(NOTE_ROW_ID)
             val midCol = c.getColumnIndex(NOTE_MID)
             val fldsCol = c.getColumnIndex(NOTE_FLDS)
@@ -265,7 +288,7 @@ class AnkiDroidRepository(
         const val AUTHORITY = "com.ichi2.anki.flashcards"
         val CARDS_URI: Uri = Uri.parse("content://$AUTHORITY/cards")
         val DECK_URI: Uri = Uri.parse("content://$AUTHORITY/decks")
-        val NOTES_URI: Uri = Uri.parse("content://$AUTHORITY/notes")
+        val NOTES_URI_V2: Uri = Uri.parse("content://$AUTHORITY/notes_v2")
         val MODELS_URI: Uri = Uri.parse("content://$AUTHORITY/models")
 
         // Card columns

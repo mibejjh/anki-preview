@@ -1,12 +1,15 @@
 package com.mibejjh.ankipreview.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -112,17 +116,59 @@ fun TodayScreen(
             )
         },
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            DeckFilterRow(
-                decks = allDecks,
-                selectedDeckIds = selectedDeckIds,
-                onToggleDeck = viewModel::toggleDeck,
-            )
-            // 폰트 크기 조절 바텀시트
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+        if (isLandscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                // 좌측 제어판
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(0.35f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(8.dp),
+                ) {
+                    Text("덱 선택", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
+                    allDecks.forEach { deck ->
+                        FilterChip(
+                            selected = deck.id in selectedDeckIds,
+                            onClick = { viewModel.toggleDeck(deck.id) },
+                            label = { Text("${deck.name} (${deck.totalDue})", style = MaterialTheme.typography.bodySmall) },
+                            modifier = Modifier.padding(vertical = 2.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("글자 크기", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
+                    FontSizeSlider(scale = fontScale, onScaleChange = viewModel::setFontScale)
+                }
+                // 우측 테이블
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(0.65f),
+                ) {
+                    when (val state = uiState) {
+                        is TodayUiState.Loading -> LoadingState()
+                        is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
+                        is TodayUiState.Success -> TodayContent(
+                            tables = state.tables,
+                            hiddenFields = hiddenFields,
+                            fontScale = fontScale,
+                            onToggleField = viewModel::toggleField,
+                            hiddenMaskFields = hiddenMaskFields,
+                            revealedNoteIds = revealedNoteIds,
+                            onToggleColumnMask = viewModel::toggleColumnMask,
+                            onToggleRevealRow = viewModel::toggleRevealRow,
+                            emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
+                        )
+                    }
+                }
+            }
+            // 바텀시트
             if (showFontDialog) {
                 ModalBottomSheet(
                     onDismissRequest = { showFontDialog = false },
@@ -131,28 +177,51 @@ fun TodayScreen(
                     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
                         Text("글자 크기", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(16.dp))
-                        FontSizeSlider(
-                            scale = fontScale,
-                            onScaleChange = viewModel::setFontScale,
-                        )
+                        FontSizeSlider(scale = fontScale, onScaleChange = viewModel::setFontScale)
                         Spacer(Modifier.height(16.dp))
                     }
                 }
             }
-            when (val state = uiState) {
-                is TodayUiState.Loading -> LoadingState()
-                is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
-                is TodayUiState.Success -> TodayContent(
-                    tables = state.tables,
-                    hiddenFields = hiddenFields,
-                    fontScale = fontScale,
-                    onToggleField = viewModel::toggleField,
-                    hiddenMaskFields = hiddenMaskFields,
-                    revealedNoteIds = revealedNoteIds,
-                    onToggleColumnMask = viewModel::toggleColumnMask,
-                    onToggleRevealRow = viewModel::toggleRevealRow,
-                    emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                DeckFilterRow(
+                    decks = allDecks,
+                    selectedDeckIds = selectedDeckIds,
+                    onToggleDeck = viewModel::toggleDeck,
                 )
+                // 폰트 크기 조절 바텀시트
+                if (showFontDialog) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showFontDialog = false },
+                        sheetState = rememberModalBottomSheetState(),
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+                            Text("글자 크기", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(16.dp))
+                            FontSizeSlider(scale = fontScale, onScaleChange = viewModel::setFontScale)
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+                }
+                when (val state = uiState) {
+                    is TodayUiState.Loading -> LoadingState()
+                    is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
+                    is TodayUiState.Success -> TodayContent(
+                        tables = state.tables,
+                        hiddenFields = hiddenFields,
+                        fontScale = fontScale,
+                        onToggleField = viewModel::toggleField,
+                        hiddenMaskFields = hiddenMaskFields,
+                        revealedNoteIds = revealedNoteIds,
+                        onToggleColumnMask = viewModel::toggleColumnMask,
+                        onToggleRevealRow = viewModel::toggleRevealRow,
+                        emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
+                    )
+                }
             }
         }
     }

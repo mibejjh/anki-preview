@@ -71,7 +71,7 @@ fun TodayScreen(
     val allDecks by viewModel.allDecks.collectAsStateWithLifecycle()
     val selectedDeckIds by viewModel.selectedDeckIds.collectAsStateWithLifecycle()
     val hiddenFields by viewModel.hiddenFields.collectAsStateWithLifecycle()
-    val hideAnswers by viewModel.hideAnswers.collectAsStateWithLifecycle()
+    val hiddenMaskFields by viewModel.hiddenMaskFields.collectAsStateWithLifecycle()
     val revealedNoteIds by viewModel.revealedNoteIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -81,12 +81,6 @@ fun TodayScreen(
             TopAppBar(
                 title = { Text("오늘의 카드") },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleHideAnswers() }) {
-                        Icon(
-                            if (hideAnswers) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (hideAnswers) "모두 보기" else "가리기",
-                        )
-                    }
                     IconButton(onClick = { viewModel.load() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                     }
@@ -126,8 +120,9 @@ fun TodayScreen(
                     hiddenFields = hiddenFields,
                     fontScale = fontScale,
                     onToggleField = viewModel::toggleField,
-                    hideAnswers = hideAnswers,
+                    hiddenMaskFields = hiddenMaskFields,
                     revealedNoteIds = revealedNoteIds,
+                    onToggleColumnMask = viewModel::toggleColumnMask,
                     onToggleRevealRow = viewModel::toggleRevealRow,
                     emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
                 )
@@ -189,8 +184,9 @@ private fun TodayContent(
     hiddenFields: Map<Long, Set<Int>>,
     fontScale: Float,
     onToggleField: (Long, Int) -> Unit,
-    hideAnswers: Boolean,
+    hiddenMaskFields: Map<Long, Set<Int>>,
     revealedNoteIds: Set<Long>,
+    onToggleColumnMask: (Long, Int) -> Unit,
     onToggleRevealRow: (Long) -> Unit,
     emptyMessage: String,
 ) {
@@ -217,8 +213,9 @@ private fun TodayContent(
                     hiddenFields = hiddenFields[table.deckId] ?: emptySet(),
                     fontScale = fontScale,
                     onToggleField = { onToggleField(table.deckId, it) },
-                    hideAnswers = hideAnswers,
+                    maskedFields = hiddenMaskFields[table.deckId] ?: emptySet(),
                     revealedNoteIds = revealedNoteIds,
+                    onToggleColumnMask = { onToggleColumnMask(table.deckId, it) },
                     onToggleRevealRow = onToggleRevealRow,
                 )
             }
@@ -232,12 +229,13 @@ private fun NoteTableSection(
     hiddenFields: Set<Int>,
     fontScale: Float,
     onToggleField: (Int) -> Unit,
-    hideAnswers: Boolean,
+    maskedFields: Set<Int>,
     revealedNoteIds: Set<Long>,
+    onToggleColumnMask: (Int) -> Unit,
     onToggleRevealRow: (Long) -> Unit,
 ) {
     val visibleIndices = table.fieldNames.indices.filter { it !in hiddenFields }
-    val firstVisibleIdx = visibleIndices.firstOrNull() ?: 0
+    val hasMaskedColumns = maskedFields.isNotEmpty()
     Column {
         Text(
             text = table.deckName,
@@ -277,27 +275,42 @@ private fun NoteTableSection(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
         ) {
+            // 헤더 행 (열 이름 + 가리기 아이콘)
             Row {
                 visibleIndices.forEach { i ->
-                    TableCell(
-                        text = table.fieldNames[i],
-                        isHeader = true,
-                        fontScale = fontScale,
-                        hidden = false,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        TableCell(
+                            text = table.fieldNames[i],
+                            isHeader = true,
+                            fontScale = fontScale,
+                            hidden = false,
+                        )
+                        IconButton(
+                            onClick = { onToggleColumnMask(i) },
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Icon(
+                                if (i in maskedFields) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (i in maskedFields) "열 보이기" else "열 가리기",
+                                modifier = Modifier.size(14.dp),
+                                tint = if (i in maskedFields) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
+            // 데이터 행
             table.rows.forEach { row ->
-                val isRowHidden = hideAnswers && row.noteId !in revealedNoteIds
+                val rowRevealed = row.noteId in revealedNoteIds
                 Row(
-                    modifier = if (hideAnswers) {
+                    modifier = if (hasMaskedColumns) {
                         Modifier.clickable { onToggleRevealRow(row.noteId) }
                     } else {
                         Modifier
                     },
                 ) {
-                    visibleIndices.forEachIndexed { colIdx, i ->
-                        val cellHidden = isRowHidden && i != firstVisibleIdx
+                    visibleIndices.forEach { i ->
+                        val cellHidden = i in maskedFields && !rowRevealed
                         TableCell(
                             text = if (cellHidden) "?" else row.fieldValues.getOrElse(i) { "" },
                             isHeader = false,

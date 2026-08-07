@@ -44,9 +44,9 @@ class TodayViewModel(
     private val _hiddenFields = MutableStateFlow<Map<Long, Set<Int>>>(emptyMap())
     val hiddenFields: StateFlow<Map<Long, Set<Int>>> = _hiddenFields.asStateFlow()
 
-    /** 답변 가리기 모드 (true = 가리기, false = 모두 보기). */
-    private val _hideAnswers = MutableStateFlow(false)
-    val hideAnswers: StateFlow<Boolean> = _hideAnswers.asStateFlow()
+    /** 답변 가리기 모드에서 숨긴 열 인덱스 집합 (덱 id → 마스크된 필드 인덱스). */
+    private val _hiddenMaskFields = MutableStateFlow<Map<Long, Set<Int>>>(emptyMap())
+    val hiddenMaskFields: StateFlow<Map<Long, Set<Int>>> = _hiddenMaskFields.asStateFlow()
 
     /** 가리기 모드에서 수동으로 공개된 노트 id 집합. */
     private val _revealedNoteIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -99,22 +99,17 @@ class TodayViewModel(
         _fontScale.value = scale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
     }
 
-    /** 답변 가리기 모드를 토글한다. */
-    fun toggleHideAnswers() {
-        _hideAnswers.value = !_hideAnswers.value
-        _revealedNoteIds.value = emptySet()
+    /** 특정 덱의 특정 열(필드) 마스크를 토글한다. */
+    fun toggleColumnMask(deckId: Long, fieldIndex: Int) {
+        val current = _hiddenMaskFields.value[deckId] ?: emptySet()
+        val updated = if (fieldIndex in current) current - fieldIndex else current + fieldIndex
+        _hiddenMaskFields.value = _hiddenMaskFields.value + (deckId to updated)
     }
 
-    /** 특정 노트의 답변 공개 여부를 토글한다 (가리기 모드에서만 의미 있음). */
+    /** 특정 노트의 답변 공개 여부를 토글한다. */
     fun toggleRevealRow(noteId: Long) {
         val current = _revealedNoteIds.value
         _revealedNoteIds.value = if (noteId in current) current - noteId else current + noteId
-    }
-
-    /** 모든 답변을 공개한다. */
-    fun revealAll() {
-        _hideAnswers.value = false
-        _revealedNoteIds.value = emptySet()
     }
 
     companion object {

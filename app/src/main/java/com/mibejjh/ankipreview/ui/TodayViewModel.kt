@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.mibejjh.ankipreview.data.anki.AnkiRepository
 import com.mibejjh.ankipreview.data.model.Deck
-import com.mibejjh.ankipreview.data.model.TodayPlan
+import com.mibejjh.ankipreview.data.model.NoteTable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 /** 오늘 카드 화면의 Ui 상태. */
 sealed interface TodayUiState {
     data object Loading : TodayUiState
-    data class Success(val plan: TodayPlan) : TodayUiState
+    data class Success(val tables: List<NoteTable>) : TodayUiState
     data class Error(val message: String) : TodayUiState
 }
 
@@ -40,20 +40,12 @@ class TodayViewModel(
     private val _selectedDeckIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedDeckIds: StateFlow<Set<Long>> = _selectedDeckIds.asStateFlow()
 
-    init {
-        loadDecks()
-        load()
-    }
+    /** 덱별 숨긴 필드 인덱스 집합. (덱 id → 숨긴 필드 인덱스) */
+    private val _hiddenFields = MutableStateFlow<Map<Long, Set<Int>>>(emptyMap())
+    val hiddenFields: StateFlow<Map<Long, Set<Int>>> = _hiddenFields.asStateFlow()
 
-    /** 전체 덱 목록을 불러온다. */
-    private fun loadDecks() {
-        viewModelScope.launch {
-            _allDecks.value = try {
-                if (repository.isAvailable()) repository.getDecks() else emptyList()
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }
+    init {
+        load()
     }
 
     /** 오늘 카드 계획을 다시 불러온다. 덱 목록(칩 개수)도 함께 갱신한다. */
@@ -72,7 +64,7 @@ class TodayViewModel(
                             "AnkiDroid 설정 > 고급 > 'AnkiDroid API 사용'을 켜주세요.",
                     )
                 } else {
-                    TodayUiState.Success(repository.getTodayPlan(_selectedDeckIds.value))
+                    TodayUiState.Success(repository.getNoteTables(_selectedDeckIds.value))
                 }
             } catch (e: Exception) {
                 TodayUiState.Error(e.message ?: "오늘 카드를 불러오지 못했습니다.")
@@ -97,6 +89,13 @@ class TodayViewModel(
     fun clearSelection() {
         _selectedDeckIds.value = emptySet()
         load()
+    }
+
+    /** 특정 덱의 필드(열) 표시 여부를 토글한다. */
+    fun toggleField(deckId: Long, index: Int) {
+        val current = _hiddenFields.value[deckId] ?: emptySet()
+        val updated = if (index in current) current - index else current + index
+        _hiddenFields.value = _hiddenFields.value + (deckId to updated)
     }
 
     /** 목록 글자 크기 배율을 설정한다. */

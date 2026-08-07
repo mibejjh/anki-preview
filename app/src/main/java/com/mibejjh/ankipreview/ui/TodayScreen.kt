@@ -12,15 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -34,9 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,19 +40,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mibejjh.ankipreview.data.model.Card
-import com.mibejjh.ankipreview.data.model.CardType
 import com.mibejjh.ankipreview.data.model.Deck
-import com.mibejjh.ankipreview.data.model.DeckPlan
-import com.mibejjh.ankipreview.data.model.TodayPlan
-import com.mibejjh.ankipreview.ui.theme.LearnBadge
-import com.mibejjh.ankipreview.ui.theme.NewBadge
-import com.mibejjh.ankipreview.ui.theme.RelearnBadge
-import com.mibejjh.ankipreview.ui.theme.ReviewBadge
+import com.mibejjh.ankipreview.data.model.NoteRow
+import com.mibejjh.ankipreview.data.model.NoteTable
 
 /**
  * 오늘 카드 화면. ViewModel 을 주입받아 상태를 수집한다.
- * @param repositoryProvider 실제 저장소를 공급하는 팩토리 (기본값은 Fake).
+ * @param repositoryProvider 실제 저장소를 공급하는 팩토리.
  */
 @Composable
 fun TodayRoute(
@@ -78,13 +67,8 @@ fun TodayScreen(
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val allDecks by viewModel.allDecks.collectAsStateWithLifecycle()
     val selectedDeckIds by viewModel.selectedDeckIds.collectAsStateWithLifecycle()
+    val hiddenFields by viewModel.hiddenFields.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    val tts = remember { TtsManager(context) }
-    DisposableEffect(Unit) {
-        tts.init()
-        onDispose { tts.shutdown() }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -96,9 +80,11 @@ fun TodayScreen(
                         Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                     }
                     IconButton(onClick = {
-                        (uiState as? TodayUiState.Success)?.let { AnkiActions.shareTodayPlan(context, it.plan) }
+                        (uiState as? TodayUiState.Success)?.let {
+                            PrintHelper.print(context, it.tables, hiddenFields)
+                        }
                     }) {
-                        Icon(Icons.Default.Share, contentDescription = "공유 / 인쇄")
+                        Icon(Icons.Default.Print, contentDescription = "인쇄")
                     }
                     IconButton(onClick = { AnkiActions.launchAnkiDroid(context) }) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "AnkiDroid에서 학습")
@@ -126,9 +112,10 @@ fun TodayScreen(
                 is TodayUiState.Loading -> LoadingState()
                 is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
                 is TodayUiState.Success -> TodayContent(
-                    plan = state.plan,
+                    tables = state.tables,
+                    hiddenFields = hiddenFields,
                     fontScale = fontScale,
-                    onPronounce = tts::speak,
+                    onToggleField = viewModel::toggleField,
                 )
             }
         }
@@ -190,147 +177,134 @@ private fun FontSizeSlider(scale: Float, onScaleChange: (Float) -> Unit) {
 
 @Composable
 private fun TodayContent(
-    plan: TodayPlan,
+    tables: List<NoteTable>,
+    hiddenFields: Map<Long, Set<Int>>,
     fontScale: Float,
-    onPronounce: (String) -> Unit,
+    onToggleField: (Long, Int) -> Unit,
 ) {
-    if (plan.decks.isEmpty() || plan.totalCards == 0) {
+    if (tables.isEmpty()) {
         EmptyState()
         return
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Text(
-                text = "총 ${plan.totalCards}장 · ${plan.decks.size}개 덱",
+                text = "총 ${tables.sumOf { it.rows.size }}장 · ${tables.size}개 덱",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        plan.decks.forEach { deckPlan ->
-            item(key = "deck-${deckPlan.deck.id}") {
-                DeckSectionHeader(deckPlan = deckPlan, fontScale = fontScale)
-            }
-            items(deckPlan.cards, key = { "card-${it.id}" }) { card ->
-                CardRow(card = card, fontScale = fontScale, onPronounce = onPronounce)
+        tables.forEach { table ->
+            item(key = "table-${table.deckId}") {
+                NoteTableSection(
+                    table = table,
+                    hiddenFields = hiddenFields[table.deckId] ?: emptySet(),
+                    fontScale = fontScale,
+                    onToggleField = { onToggleField(table.deckId, it) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun DeckSectionHeader(deckPlan: DeckPlan, fontScale: Float) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+private fun NoteTableSection(
+    table: NoteTable,
+    hiddenFields: Set<Int>,
+    fontScale: Float,
+    onToggleField: (Int) -> Unit,
+) {
+    val visibleIndices = table.fieldNames.indices.filter { it !in hiddenFields }
+    Column {
         Text(
-            text = deckPlan.deck.name,
+            text = table.deckName,
             style = MaterialTheme.typography.titleLarge.copy(
                 fontSize = (22 * fontScale).sp,
                 fontWeight = FontWeight.Bold,
             ),
-            modifier = Modifier.weight(1f),
         )
-        TypeCountBadge(count = deckPlan.newCount, label = "신규", color = NewBadge)
-        Spacer(Modifier.width(4.dp))
-        TypeCountBadge(count = deckPlan.learnCount, label = "학습", color = LearnBadge)
-        Spacer(Modifier.width(4.dp))
-        TypeCountBadge(count = deckPlan.reviewCount, label = "복습", color = ReviewBadge)
-    }
-}
-
-@Composable
-private fun TypeCountBadge(count: Int, label: String, color: androidx.compose.ui.graphics.Color) {
-    Surface(
-        color = color.copy(alpha = 0.18f),
-        contentColor = color,
-        shape = RoundedCornerShape(6.dp),
-    ) {
-        Text(
-            text = "$label $count",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
-}
-
-@Composable
-private fun CardRow(
-    card: Card,
-    fontScale: Float,
-    onPronounce: (String) -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        ),
-    ) {
+        // 필드(열) 선택 칩
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TypeBadge(type = card.type)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = card.questionSimple.ifBlank { card.question },
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = (22 * fontScale).sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                    )
-                }
-                Text(
-                    text = card.answerSimple.ifBlank { card.answer },
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = (17 * fontScale).sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+            table.fieldNames.forEachIndexed { index, name ->
+                FilterChip(
+                    selected = index !in hiddenFields,
+                    onClick = { onToggleField(index) },
+                    label = { Text(name) },
                 )
             }
-            IconButton(onClick = { onPronounce(card.questionSimple.ifBlank { card.question }) }) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "발음",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+        }
+        if (visibleIndices.isEmpty()) {
+            Text(
+                text = "표시할 필드를 선택하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            return
+        }
+        // 테이블 (헤더+행이 함께 가로 스크롤)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            Row {
+                visibleIndices.forEach { i ->
+                    TableCell(
+                        text = table.fieldNames[i],
+                        isHeader = true,
+                        fontScale = fontScale,
+                    )
+                }
+            }
+            table.rows.forEach { row ->
+                Row {
+                    visibleIndices.forEach { i ->
+                        TableCell(
+                            text = row.fieldValues.getOrElse(i) { "" },
+                            isHeader = false,
+                            fontScale = fontScale,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TypeBadge(type: CardType?) {
-    val (label, color) = when (type) {
-        CardType.NEW -> "신규" to NewBadge
-        CardType.LEARNING -> "학습" to LearnBadge
-        CardType.REVIEW -> "복습" to ReviewBadge
-        CardType.RELEARNING -> "재학습" to RelearnBadge
-        null -> "?" to MaterialTheme.colorScheme.outline
-    }
+private fun TableCell(text: String, isHeader: Boolean, fontScale: Float) {
+    val bg = if (isHeader) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
     Surface(
-        color = color.copy(alpha = 0.18f),
-        contentColor = color,
-        shape = RoundedCornerShape(6.dp),
+        color = bg,
+        modifier = Modifier.width(CELL_WIDTH),
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            text = text,
+            style = if (isHeader) {
+                MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = (14 * fontScale).sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            } else {
+                MaterialTheme.typography.bodyMedium.copy(fontSize = (14 * fontScale).sp)
+            },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
         )
     }
 }
+
+private val CELL_WIDTH = 150.dp
 
 @Composable
 private fun LoadingState() {
@@ -347,11 +321,11 @@ private fun EmptyState() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "오늘 예정된 카드가 없습니다",
+            text = "표시할 노트가 없습니다",
             style = MaterialTheme.typography.titleLarge,
         )
         Text(
-            text = "덱에 새 카드를 추가하거나 복습을 예약해 보세요.",
+            text = "덱을 선택하거나 새 카드를 추가해 보세요.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),

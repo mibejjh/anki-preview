@@ -1,6 +1,5 @@
 package com.mibejjh.ankipreview.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -86,38 +86,32 @@ fun TodayScreen(
     val revealedNoteIds by viewModel.revealedNoteIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showFontDialog by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                title = { },
-                actions = {
-                    IconButton(onClick = { showFontDialog = true }) {
-                        Text(
-                            text = "${String.format("%.1f", fontScale)}x",
-                            style = MaterialTheme.typography.labelMedium,
+            if (!isLandscape) {
+                TopAppBar(
+                    title = { },
+                    actions = {
+                        HeaderActions(
+                            fontScale = fontScale,
+                            onFontClick = { showFontDialog = true },
+                            onRefresh = viewModel::load,
+                            onPrint = {
+                                (uiState as? TodayUiState.Success)?.let {
+                                    PrintHelper.print(context, it.tables, hiddenFields)
+                                }
+                            },
+                            onLaunchAnki = { AnkiActions.launchAnkiDroid(context) },
                         )
-                    }
-                    IconButton(onClick = { viewModel.load() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "새로고침")
-                    }
-                    IconButton(onClick = {
-                        (uiState as? TodayUiState.Success)?.let {
-                            PrintHelper.print(context, it.tables, hiddenFields)
-                        }
-                    }) {
-                        Icon(Icons.Default.Print, contentDescription = "인쇄")
-                    }
-                    IconButton(onClick = { AnkiActions.launchAnkiDroid(context) }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "AnkiDroid에서 학습")
-                    }
-                },
-            )
+                    },
+                )
+            }
         },
     ) { innerPadding ->
-        val configuration = LocalConfiguration.current
-        val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
         if (isLandscape) {
             Row(
                 modifier = Modifier
@@ -132,6 +126,19 @@ fun TodayScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(8.dp),
                 ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HeaderActions(
+                            fontScale = fontScale,
+                            onFontClick = { showFontDialog = true },
+                            onRefresh = viewModel::load,
+                            onPrint = {
+                                (uiState as? TodayUiState.Success)?.let {
+                                    PrintHelper.print(context, it.tables, hiddenFields)
+                                }
+                            },
+                            onLaunchAnki = { AnkiActions.launchAnkiDroid(context) },
+                        )
+                    }
                     Text("덱 선택", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
                     allDecks.forEach { deck ->
                         FilterChip(
@@ -224,6 +231,31 @@ fun TodayScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RowScope.HeaderActions(
+    fontScale: Float,
+    onFontClick: () -> Unit,
+    onRefresh: () -> Unit,
+    onPrint: () -> Unit,
+    onLaunchAnki: () -> Unit,
+) {
+    IconButton(onClick = onFontClick) {
+        Text(
+            text = "${String.format("%.1f", fontScale)}x",
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+    IconButton(onClick = onRefresh) {
+        Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+    }
+    IconButton(onClick = onPrint) {
+        Icon(Icons.Default.Print, contentDescription = "인쇄")
+    }
+    IconButton(onClick = onLaunchAnki) {
+        Icon(Icons.Default.PlayArrow, contentDescription = "AnkiDroid에서 학습")
     }
 }
 

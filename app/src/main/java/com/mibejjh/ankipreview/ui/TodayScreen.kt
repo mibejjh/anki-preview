@@ -1,5 +1,6 @@
 package com.mibejjh.ankipreview.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -21,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mibejjh.ankipreview.data.model.Card
 import com.mibejjh.ankipreview.data.model.CardType
+import com.mibejjh.ankipreview.data.model.Deck
 import com.mibejjh.ankipreview.data.model.DeckPlan
 import com.mibejjh.ankipreview.data.model.TodayPlan
 import com.mibejjh.ankipreview.ui.theme.LearnBadge
@@ -72,6 +76,8 @@ fun TodayScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
+    val allDecks by viewModel.allDecks.collectAsStateWithLifecycle()
+    val selectedDeckIds by viewModel.selectedDeckIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val tts = remember { TtsManager(context) }
@@ -110,6 +116,12 @@ fun TodayScreen(
                 scale = fontScale,
                 onScaleChange = viewModel::setFontScale,
             )
+            DeckFilterRow(
+                decks = allDecks,
+                selectedDeckIds = selectedDeckIds,
+                onToggleDeck = viewModel::toggleDeck,
+                onSelectAll = viewModel::selectAll,
+            )
             when (val state = uiState) {
                 is TodayUiState.Loading -> LoadingState()
                 is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
@@ -119,6 +131,36 @@ fun TodayScreen(
                     onPronounce = tts::speak,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DeckFilterRow(
+    decks: List<Deck>,
+    selectedDeckIds: Set<Long>,
+    onToggleDeck: (Long) -> Unit,
+    onSelectAll: () -> Unit,
+) {
+    if (decks.isEmpty()) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = selectedDeckIds.isEmpty(),
+            onClick = onSelectAll,
+            label = { Text("전체") },
+        )
+        decks.forEach { deck ->
+            FilterChip(
+                selected = deck.id in selectedDeckIds,
+                onClick = { onToggleDeck(deck.id) },
+                label = { Text("${deck.name} (${deck.totalDue})") },
+            )
         }
     }
 }

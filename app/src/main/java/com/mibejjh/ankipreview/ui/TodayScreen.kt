@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,17 +25,23 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -74,13 +81,20 @@ fun TodayScreen(
     val hiddenMaskFields by viewModel.hiddenMaskFields.collectAsStateWithLifecycle()
     val revealedNoteIds by viewModel.revealedNoteIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showFontDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("오늘의 카드") },
+                title = { },
                 actions = {
+                    IconButton(onClick = { showFontDialog = true }) {
+                        Text(
+                            text = "${String.format("%.1f", fontScale)}x",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                     IconButton(onClick = { viewModel.load() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                     }
@@ -103,15 +117,28 @@ fun TodayScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            FontSizeSlider(
-                scale = fontScale,
-                onScaleChange = viewModel::setFontScale,
-            )
             DeckFilterRow(
                 decks = allDecks,
                 selectedDeckIds = selectedDeckIds,
                 onToggleDeck = viewModel::toggleDeck,
             )
+            // 폰트 크기 조절 바텀시트
+            if (showFontDialog) {
+                ModalBottomSheet(
+                    onDismissRequest = { showFontDialog = false },
+                    sheetState = rememberModalBottomSheetState(),
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+                        Text("글자 크기", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(16.dp))
+                        FontSizeSlider(
+                            scale = fontScale,
+                            onScaleChange = viewModel::setFontScale,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
+                }
+            }
             when (val state = uiState) {
                 is TodayUiState.Loading -> LoadingState()
                 is TodayUiState.Error -> ErrorState(message = state.message, onRetry = viewModel::load)
@@ -142,8 +169,8 @@ private fun DeckFilterRow(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         decks.forEach { deck ->
             FilterChip(

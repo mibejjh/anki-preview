@@ -53,4 +53,6 @@ dependencies {
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("junit:junit:4.13.2")
+    // org.json is stubbed in android.jar on the JVM; use the real Maven jar for unit tests
+    testImplementation("org.json:json:20240303")
 }

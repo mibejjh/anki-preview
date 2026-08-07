@@ -175,7 +175,7 @@ class AnkiDroidRepository(
 
     private fun buildNoteTables(deckIds: Set<Long>?): List<NoteTable> {
         val decks = queryDecks()
-        val selected = if (deckIds.isNullOrEmpty()) decks else decks.filter { it.id in deckIds }
+        val selected = if (deckIds == null) decks else decks.filter { it.id in deckIds }
         val modelFieldNames = queryModelFieldNames()
         return selected.mapNotNull { deck ->
             val notes = queryNotesForDeck(deck.name)

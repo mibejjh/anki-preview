@@ -79,18 +79,6 @@ class TodayViewModel(
         load()
     }
 
-    /** 모든 덱을 선택한다 (빈 집합 = 전체). */
-    fun selectAll() {
-        _selectedDeckIds.value = emptySet()
-        load()
-    }
-
-    /** 선택을 모두 해제한다. */
-    fun clearSelection() {
-        _selectedDeckIds.value = emptySet()
-        load()
-    }
-
     /** 특정 덱의 필드(열) 표시 여부를 토글한다. */
     fun toggleField(deckId: Long, index: Int) {
         val current = _hiddenFields.value[deckId] ?: emptySet()

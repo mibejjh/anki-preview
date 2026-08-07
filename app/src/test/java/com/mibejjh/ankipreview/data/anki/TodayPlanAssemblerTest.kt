@@ -96,13 +96,13 @@ class TodayPlanAssemblerTest {
     }
 
     @Test
-    fun `empty deckIds means all decks`() {
+    fun `empty deckIds yields empty plan`() {
         val plan = TodayPlanAssembler.assemble(
             decksWithCounts = listOf(deck to DeckCounts(1, 1, 1)),
             cardsByDeck = mapOf(1L to listOf(card(1, CardType.NEW))),
             deckIds = emptySet(),
         )
-        assertEquals(1, plan.decks.size)
+        assertEquals(0, plan.decks.size)
     }
 
     @Test

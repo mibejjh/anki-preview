@@ -106,7 +106,6 @@ fun TodayScreen(
                 decks = allDecks,
                 selectedDeckIds = selectedDeckIds,
                 onToggleDeck = viewModel::toggleDeck,
-                onSelectAll = viewModel::selectAll,
             )
             when (val state = uiState) {
                 is TodayUiState.Loading -> LoadingState()
@@ -116,6 +115,7 @@ fun TodayScreen(
                     hiddenFields = hiddenFields,
                     fontScale = fontScale,
                     onToggleField = viewModel::toggleField,
+                    emptyMessage = if (selectedDeckIds.isEmpty()) "덱을 선택하세요" else "표시할 노트가 없습니다",
                 )
             }
         }
@@ -127,7 +127,6 @@ private fun DeckFilterRow(
     decks: List<Deck>,
     selectedDeckIds: Set<Long>,
     onToggleDeck: (Long) -> Unit,
-    onSelectAll: () -> Unit,
 ) {
     if (decks.isEmpty()) return
     Row(
@@ -137,11 +136,6 @@ private fun DeckFilterRow(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilterChip(
-            selected = selectedDeckIds.isEmpty(),
-            onClick = onSelectAll,
-            label = { Text("전체") },
-        )
         decks.forEach { deck ->
             FilterChip(
                 selected = deck.id in selectedDeckIds,
@@ -181,9 +175,10 @@ private fun TodayContent(
     hiddenFields: Map<Long, Set<Int>>,
     fontScale: Float,
     onToggleField: (Long, Int) -> Unit,
+    emptyMessage: String,
 ) {
     if (tables.isEmpty()) {
-        EmptyState()
+        EmptyState(emptyMessage)
         return
     }
     LazyColumn(
@@ -314,14 +309,14 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun EmptyState() {
+private fun EmptyState(message: String) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "표시할 노트가 없습니다",
+            text = message,
             style = MaterialTheme.typography.titleLarge,
         )
         Text(

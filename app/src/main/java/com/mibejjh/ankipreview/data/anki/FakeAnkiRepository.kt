@@ -96,7 +96,7 @@ class FakeAnkiRepository : AnkiRepository {
         cards.filter { it.deckId == deckId }
 
     override suspend fun getNoteTables(deckIds: Set<Long>?): List<NoteTable> {
-        val selected = if (deckIds.isNullOrEmpty()) decks else decks.filter { it.id in deckIds }
+        val selected = if (deckIds == null) decks else decks.filter { it.id in deckIds }
         return selected.mapNotNull { deck ->
             val rows = noteRows[deck.id] ?: return@mapNotNull null
             NoteTable(
